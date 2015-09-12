@@ -26,12 +26,17 @@ public class ChatHandler implements ChatService.Iface {
         BasicDBObject dbObject = new BasicDBObject()
                 .append("nickname",nickname)
                 .append("channel", channel);
+
         //check if user already joined
         if (userChannelCollection.findOne(dbObject) != null){
             return new Response("ERROR","user "+nickname+" already joined "+channel);
         } else {
+            //set the last fetch to current timestamp
+            DBCollection lastFetchCollection = getUserLastFetchCollection();
+            lastFetchCollection.update(new BasicDBObject().append("nickname",nickname),new BasicDBObject().append("nickname", nickname).append("last_fetch", System.currentTimeMillis()),true,false,WriteConcern.ACKNOWLEDGED);
+
             userChannelCollection.insert(dbObject, WriteConcern.ACKNOWLEDGED);
-            return new Response("OK","");
+            return new Response("OK",nickname+" has joined "+channel);
         }
     }
 
@@ -43,7 +48,7 @@ public class ChatHandler implements ChatService.Iface {
                 .append("channel", channel);
         WriteResult writeResult = userChannelCollection.remove(dbObject, WriteConcern.ACKNOWLEDGED);
         if (writeResult.getN() == 0){
-            return new Response("ERROR","user "+nickname+"doesn't join"+channel);
+            return new Response("ERROR","user "+nickname+" doesn't join "+channel);
         } else {
             return new Response("OK","removed");
         }
@@ -51,14 +56,23 @@ public class ChatHandler implements ChatService.Iface {
 
     @Override
     public Response send(String nickname, String channel, String message) throws TException {
-        DBCollection messageCollection = this.getMessageCollection();
-        DBObject dbObject = new BasicDBObject()
-                .append("nickname",nickname)
-                .append("channel", channel)
-                .append("content", message)
-                .append("timestamp", System.currentTimeMillis());
-        messageCollection.insert(dbObject,WriteConcern.ACKNOWLEDGED);
-        return new Response("OK","");
+        //check if user has joined to channel
+        DBCollection userChannelCollection = getUserChannelCollection();
+        DBObject one = userChannelCollection.findOne(new BasicDBObject().append("nickname", nickname).append("channel", channel));
+        if (one == null){
+            return new Response("ERROR","User "+nickname+" not joined "+channel);
+        } else {
+            DBCollection messageCollection = this.getMessageCollection();
+            DBObject dbObject = new BasicDBObject()
+                    .append("nickname",nickname)
+                    .append("channel", channel)
+                    .append("content", message)
+                    .append("timestamp", System.currentTimeMillis());
+            messageCollection.insert(dbObject,WriteConcern.ACKNOWLEDGED);
+            return new Response("OK","");
+        }
+
+
     }
 
     @Override
@@ -80,10 +94,10 @@ public class ChatHandler implements ChatService.Iface {
     public ChatResponse recvAll(String nickname) throws TException {
         //{'last_fetch':{'$gte':lastFetch},'channel':{'or':[....]}}
         long lastFetch = fetchUserLastFetchAndUpdate(nickname);
-        BasicDBObject messageQuery = new BasicDBObject().append("last_fetch", new BasicDBObject("$gte", lastFetch));
+        BasicDBObject messageQuery = new BasicDBObject().append("timestamp", new BasicDBObject("$gte", lastFetch));
 
         List<String> channels = fetchUserChannels(nickname);
-        messageQuery.append("channel",new BasicDBObject().append("$or", channels));
+        messageQuery.append("channel",new BasicDBObject().append("$in", channels));
 
         BasicDBObject sortQuery = new BasicDBObject().append("channel",1).append("timestamp",1);
 
@@ -142,22 +156,17 @@ public class ChatHandler implements ChatService.Iface {
     }
 
     private void updateLastFetch(String nickname){
-        DBCollection userChannelCollection = getUserChannelCollection();
+        DBCollection userLastFetchCollection = getUserLastFetchCollection();
         DBObject userChannelQuery = new BasicDBObject().append("nickname", nickname);
-        userChannelCollection.update(userChannelQuery,
-                new BasicDBObject().append("$set",
-                        new BasicDBObject("last_fetch", System.currentTimeMillis())
-                )
-                , true //upsert
-                , false //only update one
-        );
+        userLastFetchCollection.update(userChannelQuery,
+                new BasicDBObject().append("nickname",nickname).append("last_fetch",System.currentTimeMillis()));
     }
 
     private long fetchUserLastFetch(String nickname){
-        DBCollection userChannelCollection = getUserChannelCollection();
-        DBObject userChannelQuery = new BasicDBObject().append("nickname", nickname);
-        DBObject userChannelDBObject = userChannelCollection.findOne(userChannelQuery);
-        return (long) userChannelDBObject.get("last_fetch");
+        DBCollection userLastFetchCollection = getUserLastFetchCollection();
+        DBObject userQuery = new BasicDBObject().append("nickname", nickname);
+        DBObject userDBObject = userLastFetchCollection.findOne(userQuery);
+        return (long) userDBObject.get("last_fetch");
     }
 
     /**
@@ -170,7 +179,7 @@ public class ChatHandler implements ChatService.Iface {
         //get all messages
         List<Message> messages = new ArrayList<>();
         BasicDBObject messageQuery = new BasicDBObject()
-                .append("timestamp", new BasicDBObject().append("$gte", lastFetch));
+                .append("timestamp", new BasicDBObject().append("\\$gte", lastFetch));
         if (channel != null){
             messageQuery.append("channel",channel);
         }
