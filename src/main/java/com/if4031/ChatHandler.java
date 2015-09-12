@@ -50,7 +50,7 @@ public class ChatHandler implements ChatService.Iface {
         if (writeResult.getN() == 0){
             return new Response("ERROR","user "+nickname+" doesn't join "+channel);
         } else {
-            return new Response("OK","removed");
+            return new Response("OK",nickname+" removed from "+channel);
         }
     }
 
@@ -94,6 +94,9 @@ public class ChatHandler implements ChatService.Iface {
     public ChatResponse recvAll(String nickname) throws TException {
         //{'last_fetch':{'$gte':lastFetch},'channel':{'or':[....]}}
         long lastFetch = fetchUserLastFetchAndUpdate(nickname);
+        if (lastFetch == -1){
+            return new ChatResponse("OK","No messages found",new ArrayList<>());
+        }
         BasicDBObject messageQuery = new BasicDBObject().append("timestamp", new BasicDBObject("$gte", lastFetch));
 
         List<String> channels = fetchUserChannels(nickname);
@@ -115,7 +118,7 @@ public class ChatHandler implements ChatService.Iface {
                     (long) dbObject.get("timestamp")
             ));
         }
-        return new ChatResponse("ok","Got "+counts+" messages",messages);
+        return new ChatResponse("OK","Got "+counts+" messages",messages);
     }
 
     private DBCollection getUserChannelCollection(){
@@ -166,7 +169,11 @@ public class ChatHandler implements ChatService.Iface {
         DBCollection userLastFetchCollection = getUserLastFetchCollection();
         DBObject userQuery = new BasicDBObject().append("nickname", nickname);
         DBObject userDBObject = userLastFetchCollection.findOne(userQuery);
-        return (long) userDBObject.get("last_fetch");
+        if (userDBObject == null){
+            return -1;
+        } else {
+            return (long) userDBObject.get("last_fetch");
+        }
     }
 
     /**
