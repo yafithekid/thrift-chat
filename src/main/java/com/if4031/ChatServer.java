@@ -3,6 +3,7 @@ package com.if4031;
 import com.mongodb.MongoClient;
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TSimpleServer;
+import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
 
@@ -30,8 +31,7 @@ public class ChatServer {
     public static void simple(ChatService.Processor processor) {
         try {
             TServerTransport serverTransport = new TServerSocket(9090);
-            TServer server = new TSimpleServer(new
-                    TServer.Args(serverTransport).processor(processor));
+            TServer server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
             System.out.println("Server started on port 9090");
             server.serve();
         } catch (Exception e) {

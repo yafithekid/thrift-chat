@@ -19,6 +19,7 @@ public class ChatClient {
             TProtocol protocol = new TBinaryProtocol(transport);
             ChatService.Client client = new ChatService.Client(protocol);
             perform(client);
+            transport.close();
         } catch (TTransportException e) {
             e.printStackTrace();
         }
