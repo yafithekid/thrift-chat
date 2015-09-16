@@ -3,7 +3,7 @@ version '1.0'
 
 apply plugin: 'java'
 
-sourceCompatibility = 1.5
+sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
@@ -23,6 +23,28 @@ task helloWorldJar(type: Jar){
         attributes 'Main-Class': 'com.if4031.HelloWorld'
     }
     baseName = project.name + '-helloworld'
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    with jar
+}
+
+task clientJar(type: Jar){
+    manifest {
+        attributes 'Main-Class': 'com.if4031.ChatClient'
+    }
+    baseName = project.name + '-client'
+    from {
+        configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    with jar
+}
+
+task serverJar(type: Jar){
+    manifest {
+        attributes 'Main-Class': 'com.if4031.ChatServer'
+    }
+    baseName = project.name + '-server'
     from {
         configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
     }
