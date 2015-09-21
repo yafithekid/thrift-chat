@@ -1,5 +1,10 @@
 # thrift-chat
 
+### Members
+
+- 13512014 Muhammad Yafi
+- 13512066 Calvin Sadewa
+
 Simple chat application using Apache Thrift.
 
 ### Prerequisites
