@@ -3,6 +3,14 @@ package com.if4031;
 import com.mongodb.DB;
 import com.mongodb.MongoClient;
 import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.server.TServer;
+import org.apache.thrift.server.TThreadPoolServer;
+import org.apache.thrift.transport.TServerSocket;
+import org.apache.thrift.transport.TServerTransport;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
 import org.junit.Test;
 
 import java.io.PrintStream;
@@ -11,25 +19,56 @@ import java.util.Set;
 import static org.junit.Assert.*;
 
 public class ChatHandlerTest {
-    ChatHandler chatHandler;
+    ChatService.Client chatHandler;
+    ChatHandler impl;
     DB testDB;
     PrintStream sysout = System.out;
+    ChatService.Processor processor;
+    TTransport transport;
+    TServer server;
 
     @org.junit.Before
     public void setUp() throws Exception {
-        MongoClient client = new MongoClient("localhost",27017);
-        testDB = (DB) client.getDB("if4031-test");
-        Set<String> collectionNames = testDB.getCollectionNames();
-        for(String name: collectionNames){
-            System.out.println(name);
+        System.out.println("Contacting MongoDB on localhost:27017...");
+        MongoClient client = new MongoClient("localhost", 27017);
+        try {
+            impl = new ChatHandler(client.getDB("if4031-test"));
+            processor = new ChatService.Processor(impl);
+            Runnable simple = new Runnable() {
+                public void run() {
+                    simple(processor);
+                }
+            };
+
+            new Thread(simple).start();
+        } catch (Exception x) {
+            x.printStackTrace();
         }
-        chatHandler = new ChatHandler(testDB);
+
+
+        transport = new TSocket("localhost", 9090);
+        transport.open();
+        TProtocol protocol = new TBinaryProtocol(transport);
+        chatHandler = new ChatService.Client(protocol);
+    }
+
+    private void simple(ChatService.Processor processor) {
+        try {
+            TServerTransport serverTransport = new TServerSocket(9090);
+            server = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport).processor(processor));
+            System.out.println("Server started on port 9090");
+            server.serve();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @org.junit.After
     public void tearDown() throws Exception {
         MongoClient client = new MongoClient("localhost",27017);
         client.dropDatabase("if4031-test");
+        transport.close();
+        server.stop();
     }
 
     @Test
